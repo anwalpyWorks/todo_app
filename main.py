@@ -3,73 +3,19 @@ from fastapi import FastAPI
 from model.models import Employee, User
 from mongoengine import connect
 import json
+from pydantic import BaseModel
+from passlib.context import CryptContext
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
 connect(db="hrms", host="localhost", port=27017)
 
+templates = Jinja2Templates(directory="templates")
 
-# @app.get("/")
-# def home():
-#   return {"message":"Hello world"}
-
-@app.get("/get_all_employees")
-def get_all_employees():
-    employees = json.loads(Employee.objects().to_json())
-    return {"employees": employees}
-
-
-from fastapi import Path
-
-
-@app.get("/get_employee/{emp_id}")
-def get_employee(emp_id: int = Path(..., gt=0)):
-    employee = Employee.objects.get(emp_id=emp_id)
-    employee_dict = {
-        "emp_id": employee.emp_id,
-        "name": employee.name,
-        "age": employee.age,
-        "teams": employee.teams
-    }
-    return employee_dict
-
-
-from fastapi import Query
-from mongoengine.queryset.visitor import Q
-
-
-@app.get("/search_employees")
-def search_employees(name: str, age: int = Query(None, gt=18)):
-    employees = json.loads(Employee.objects.filter(Q(name__icontains=name) | Q(age=age)).to_json())
-    return {"employees": employees}
-
-
-from pydantic import BaseModel
-from fastapi import Body
-
-class NewEmployee(BaseModel):
-    emp_id: int
-    name: str
-    age: int = Body(None, gt=18)
-    teams: list
-
-
-@app.post("/add_employee")
-def add_employee(employee: NewEmployee):
-    new_employee = Employee(emp_id=employee.emp_id,
-                            name=employee.name,
-                            age=employee.age,
-                            teams=employee.teams)
-
-    new_employee.save()
-
-    return {"message": "employee has added successfully"}
-
-
-
-
-
-
-
+@app.get("/")
+def view():
+    return
 
 
 
@@ -78,8 +24,6 @@ class NewUser(BaseModel):
     username: str
     password: str
 
-
-from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -108,16 +52,22 @@ def authenticate_user(username, password):
     except User.DoesNotExist:
         return False
 
+
 from datetime import timedelta, datetime
-from jose import jwt
+from jose.constants import ALGORITHMS
+import jose.jwt
 
-def create_access_token(data: dict, expires_delta: timedelta, SECRET_KEY=None, ALGORITHM=None):
+SECRET_KEY = "066244f09392a2ac8cfe0fb887e85492e316dae5c6f7969ad460ba4f040e5cd5"
+
+
+ALGORITHMS = "HS256"
+
+def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
-
     expire = datetime.utcnow() + expires_delta
-    to_encode.update({"exp":expire})
-
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jose.jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHMS)
+    return encoded_jwt
 
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -125,11 +75,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     password = form_data.password
 
     if authenticate_user(username, password):
-        access_token = create_access_token(data={"sub": username}, expires_delta=timedelta(minutes=30))
-
-        return {"access_token": username, "token_type": "bearer"}
+        access_token = create_access_token(
+            data={"sub": username}, expires_delta=timedelta(minutes=30))
+        return {"access_token": access_token, "token_type": "bearer"}
     else:
         raise HTTPException(status_code=400, detail=" incorrect user name or password")
+
 
 
 @app.get("/")
