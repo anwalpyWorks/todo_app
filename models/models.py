@@ -1,4 +1,10 @@
 from mongoengine import Document, StringField, IntField, ListField
+from pydantic import BaseModel
+
+
+class Todo(BaseModel):
+    name: str
+    description: str
 
 
 class Employee(Document):
